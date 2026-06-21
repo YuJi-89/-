@@ -371,8 +371,7 @@ finprivacy_audit/
         ├── adapter_config.json
         ├── training_config.json
         ├── tokenizer_config.json
-        ├── chat_template.jinja
-        └── README.md
+        └── chat_template.jinja 
 ```
 
 ---
