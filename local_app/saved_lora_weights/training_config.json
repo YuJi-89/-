@@ -1,0 +1,35 @@
+{
+  "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+  "lora_r": 16,
+  "lora_alpha": 32,
+  "lora_dropout": 0.05,
+  "target_modules": [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj"
+  ],
+  "num_epochs": 5,
+  "batch_size": 4,
+  "gradient_accumulation_steps": 2,
+  "learning_rate": 0.0002,
+  "max_seq_length": 1024,
+  "torch_dtype": "torch.bfloat16",
+  "epoch_losses": [
+    0.7411628850782761,
+    0.21813704737208103,
+    0.05889104327017613,
+    0.038180338862267404,
+    0.03543916469947858
+  ],
+  "epoch_perplexities": [
+    2.0983742643472785,
+    1.2437575096376818,
+    1.0606596684351544,
+    1.0389185733791153,
+    1.0360746163001588
+  ],
+  "final_loss": 0.2104570861344468,
+  "total_steps": 2190,
+  "train_time_seconds": 35308.61738228798
+}
