@@ -61,7 +61,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-# ── Logging ──
+# 日志
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -70,10 +70,10 @@ logging.basicConfig(
 logger = logging.getLogger("defense_guardrail")
 
 
-# ── Aho-Corasick lightweight high-risk namespace matcher ──
+# Aho-Corasick 高危命名空间匹配器
 
 class TrieNode:
-    """Trie node for Aho-Corasick automaton."""
+    """Aho-Corasick 自动机的 Trie 节点。"""
     __slots__ = ("children", "fail", "output", "depth")
 
     def __init__(self, depth: int = 0):
@@ -104,8 +104,8 @@ class AhoCorasickMatcher:
         self._build()
 
     def _build(self):
-        """Build trie with failure links."""
-        # ── 1. Insert all keywords ──
+        """构建 Trie 与失败指针。"""
+        # 1. 插入所有关键词
         for kw in self.keywords:
             node = self.root
             for ch in kw:
@@ -114,7 +114,7 @@ class AhoCorasickMatcher:
                 node = node.children[ch]
             node.output.append(kw)
 
-        # ── 2. BFS to construct failure links ──
+        # 2. 宽度优先构建失败指针
         from collections import deque as bfs_queue
 
         queue = bfs_queue()
@@ -126,12 +126,12 @@ class AhoCorasickMatcher:
             current = queue.popleft()
             for ch, child in current.children.items():
                 queue.append(child)
-                # Trace back along failure chain
+                # 沿失败链回溯
                 f_node = current.fail
                 while f_node is not None and ch not in f_node.children:
                     f_node = f_node.fail
                 child.fail = f_node.children[ch] if f_node else self.root
-                # Inherit output from failure node
+                # 继承失败节点的输出
                 if child.fail is not None:
                     child.output.extend(child.fail.output)
 
@@ -151,7 +151,7 @@ class AhoCorasickMatcher:
         node = self.root
 
         for i, ch in enumerate(text):
-            # Trace back along failure chain
+            # 沿失败链回退
             while node is not None and ch not in node.children:
                 node = node.fail
             if node is None:
@@ -160,7 +160,7 @@ class AhoCorasickMatcher:
 
             node = node.children[ch]
 
-            # Collect all matches
+            # 收集所有匹配
             for kw in node.output:
                 results.append({
                     "keyword": kw,
@@ -171,29 +171,29 @@ class AhoCorasickMatcher:
         return results
 
 
-# ── High-risk namespace definitions (quantitative finance) ──
+# 高危命名空间定义（量化金融）
 
-# Chinese high-risk entities
+# 中文高危实体
 QUANT_HIGH_RISK_ENTITIES_ZH = [
-    # Factor-related
+    # 因子相关
     "因子", "Alpha因子", "alpha信号", "超额收益因子",
     "选股因子", "预测变量", "收益驱动因子",
-    # Parameter / weight-related
+    # 参数与权重
     "权重", "参数", "配比", "配置系数", "分配比例",
     "暴露度", "持仓比重", "调优变量", "模型系数",
-    # Risk control
+    # 风控
     "止损", "阈值", "止损阈值", "风控参数", "回撤控制",
     "杠杆", "杠杆倍数", "仓位上限", "强制平仓",
     "熔断", "风控触发",
-    # Strategy core
+    # 策略核心
     "策略参数", "核心策略", "量化策略", "交易算法",
     "多因子模型", "套利模型",
-    # Numeric patterns
+    # 数值模式
     "weight=", "stop_loss", "threshold=", "leverage=",
     "decay=",
 ]
 
-# English high-risk entities
+# 英文高危实体
 QUANT_HIGH_RISK_ENTITIES_EN = [
     "alpha", "factor", "weight", "threshold",
     "stop_loss", "leverage", "decay", "sharpe",
@@ -202,15 +202,15 @@ QUANT_HIGH_RISK_ENTITIES_EN = [
     "MultiFactor", "RiskFactor", "SmartBeta",
 ]
 
-# Combined entity set
+# 合并实体集
 ALL_HIGH_RISK_ENTITIES = QUANT_HIGH_RISK_ENTITIES_ZH + QUANT_HIGH_RISK_ENTITIES_EN
 
 
-# ── Stage 1: Local PPL Detection ──
+# Stage 1：局部 PPL 检测
 
 @dataclass
 class Stage1Result:
-    """Stage 1 detection result."""
+    """Stage 1 检测结果。"""
     namespace_hit: bool
     hit_keywords: List[str]
     local_ppl: float
@@ -252,13 +252,13 @@ class LocalPPLDetector:
         self._namespace_triggered: bool = False
 
     def reset(self):
-        """Reset sliding window state (call on new conversation start)."""
+        """重置滑动窗口状态。"""
         self._log_prob_window.clear()
         self._namespace_triggered = False
 
     def check(self, token_text: str, log_prob: float) -> Stage1Result:
         """
-        Perform Stage 1 check for a single newly generated token.
+        对单个新生成 token 进行 Stage 1 检测。
 
         Args:
             token_text: Decoded text of the current token
@@ -267,31 +267,31 @@ class LocalPPLDetector:
         Returns:
             Stage1Result
         """
-        # ── Namespace matching ──
+        # 命名空间匹配
         hits = self.matcher.search(token_text)
         hit_keywords = [h["keyword"] for h in hits]
 
         if hits:
             self._namespace_triggered = True
 
-        # ── Update sliding window ──
+        # 更新滑动窗口
         self._log_prob_window.append(log_prob)
 
-        # ── Compute local PPL ──
+        # 计算局部 PPL
         window = list(self._log_prob_window)
         window_size = len(window)
 
         trigger_stage2 = False
         local_ppl = float("inf")
 
-        # Only compute PPL when namespace hit + window is full
+        # 仅在命名空间命中且窗口满时计算 PPL
         if self._namespace_triggered and window_size == self.window_size:
             avg_log_prob = np.mean(window)
-            # Prevent numeric overflow
+            # 防止数值溢出
             avg_log_prob = float(np.clip(avg_log_prob, -100, 0))
             local_ppl = float(math.exp(-avg_log_prob))
 
-            # PPL below threshold -> suspected memorisation -> trigger Stage 2
+            # PPL 低于阈值，疑似记忆，触发 Stage 2
             if local_ppl < self.ppl_threshold:
                 trigger_stage2 = True
 
@@ -305,11 +305,11 @@ class LocalPPLDetector:
         )
 
 
-# ── Stage 2: Semantic Entropy Final Arbitration ──
+# Stage 2：语义熵仲裁
 
 @dataclass
 class Stage2Result:
-    """Stage 2 semantic entropy arbitration result."""
+    """Stage 2 语义熵仲裁结果。"""
     semantic_entropy: float
     verdict: str  # "BLOCK" | "PASS"
     reason: str
@@ -337,7 +337,7 @@ class SemanticEntropyArbiter:
       - Falls back to n-gram Jaccard similarity (no neural network)
     """
 
-    # Lightweight embedding model (optional)
+    # 轻量嵌入模型（可选）
     LIGHTWEIGHT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
     def __init__(
@@ -361,7 +361,7 @@ class SemanticEntropyArbiter:
         self.temperature = temperature
         self.entropy_threshold = entropy_threshold
 
-        # Embedding model (lazy load)
+        # 嵌入模型（延迟加载）
         self._embedding_model = None
         self._use_embeddings = use_embeddings
 
@@ -416,7 +416,7 @@ class SemanticEntropyArbiter:
                 num_return_sequences=1,
             )
 
-            # Extract newly generated tokens
+            # 提取新生成的 token
             new_tokens = outputs[0][input_ids.shape[1]:]
             completion = tokenizer.decode(
                 new_tokens, skip_special_tokens=True
@@ -445,7 +445,7 @@ class SemanticEntropyArbiter:
         return sim
 
     def _pairwise_similarity(self, a: str, b: str) -> float:
-        """Semantic similarity between two text segments."""
+        """计算两段文本的语义相似度。"""
         if not a or not b:
             return 0.0
 
@@ -456,7 +456,7 @@ class SemanticEntropyArbiter:
                     convert_to_numpy=True,
                     show_progress_bar=False,
                 )
-                # Cosine similarity
+                # 余弦相似度
                 dot = np.dot(emb[0], emb[1])
                 norm = np.linalg.norm(emb[0]) * np.linalg.norm(emb[1])
                 return float(dot / max(norm, 1e-10))
@@ -470,7 +470,7 @@ class SemanticEntropyArbiter:
     def _ngram_jaccard(a: str, b: str, n: int = 3) -> float:
         """n-gram Jaccard similarity (CPU-friendly)."""
         def ngrams(text: str) -> set:
-            # Character-level n-grams
+            # 字符级 n-gram
             chars = text.lower()
             return set(
                 chars[i:i + n] for i in range(len(chars) - n + 1)
@@ -506,7 +506,7 @@ class SemanticEntropyArbiter:
         for i in range(n):
             if cluster_ids[i] != -1:
                 continue
-            # New cluster
+            # 新簇
             cluster_ids[i] = current_cluster
             for j in range(n):
                 if cluster_ids[j] == -1 and sim_matrix[i][j] > threshold:
@@ -528,13 +528,13 @@ class SemanticEntropyArbiter:
         if len(completions) < 2:
             return 0.0, [0], np.eye(1)
 
-        # ── Compute similarity matrix ──
+        # 计算相似度矩阵
         sim_matrix = self._compute_similarity_matrix(completions)
 
-        # ── Cluster ──
+        # 聚类
         cluster_ids, num_clusters = self._cluster_completions(sim_matrix)
 
-        # ── Compute cluster probability distribution ──
+        # 计算簇概率分布
         cluster_sizes = [
             sum(1 for c in cluster_ids if c == i)
             for i in range(num_clusters)
@@ -542,10 +542,10 @@ class SemanticEntropyArbiter:
         total = sum(cluster_sizes)
         probs = [s / total for s in cluster_sizes]
 
-        # ── Shannon entropy ──
+        # 香农熵
         entropy = -sum(p * math.log(max(p, 1e-10)) for p in probs)
 
-        # Normalise to [0, 1]: max entropy = log(num_clusters)
+        # 归一化到 [0, 1]：最大熵 = log(簇数)
         max_entropy = math.log(max(num_clusters, 1))
         if max_entropy > 0:
             normalized_entropy = entropy / max_entropy
@@ -575,7 +575,7 @@ class SemanticEntropyArbiter:
         Returns:
             Stage2Result
         """
-        # ── 3 parallel samples ──
+        # 3 次并行采样
         completions = self._sample_completions(
             model=model,
             input_ids=input_ids,
@@ -584,14 +584,14 @@ class SemanticEntropyArbiter:
             device=device,
         )
 
-        # ── Compute semantic entropy ──
+        # 计算语义熵
         entropy, cluster_sizes, sim_matrix = (
             self.compute_semantic_entropy(completions)
         )
 
-        # ── Decision branch ──
+        # 判定分支
         if entropy < self.entropy_threshold:
-            # Branch A: H -> 0 -> confirmed memorisation -> BLOCK
+            # 分支 A：熵趋近 0，确认记忆，拦截
             verdict = "BLOCK"
             reason = (
                 f"Semantic entropy H={entropy:.4f} < threshold={self.entropy_threshold}: "
@@ -599,7 +599,7 @@ class SemanticEntropyArbiter:
                 f"indicating memorised content; executing block"
             )
         else:
-            # Branch B: H significantly > 0 -> normal generalisation -> PASS
+            # 分支 B：熵显著大于 0，正常泛化，放行
             verdict = "PASS"
             reason = (
                 f"Semantic entropy H={entropy:.4f} >= threshold={self.entropy_threshold}: "
@@ -617,11 +617,11 @@ class SemanticEntropyArbiter:
         )
 
 
-# ── Integrated Defence Guardrail ──
+# 综合防御护栏
 
 @dataclass
 class GuardrailVerdict:
-    """Final defence guardrail verdict."""
+    """护栏最终裁决。"""
     blocked: bool
     stage: int  # 1 or 2 (which stage made the decision)
     replacement_text: Optional[str]
@@ -700,9 +700,9 @@ class DefenseGuardrail:
         else:
             self.device = torch.device(device)
 
-        logger.info(f"DefenseGuardrail initialised (device: {self.device})")
+        logger.info(f"DefenseGuardrail 初始化（设备: {self.device}）")
 
-        # ── Stage 1: Local PPL detector ──
+        # Stage 1：局部 PPL 检测器
         self.ppl_threshold = ppl_threshold or self.DEFAULT_PPL_THRESHOLD
         self.ppl_detector = LocalPPLDetector(
             window_size=window_size,
@@ -710,10 +710,10 @@ class DefenseGuardrail:
             keywords=keywords,
         )
         logger.info(
-            f"Stage 1 ready: W={window_size}, tau_ppl={self.ppl_threshold}"
+            f"Stage 1 就绪: W={window_size}, tau_ppl={self.ppl_threshold}"
         )
 
-        # ── Stage 2: Semantic entropy arbiter ──
+        # Stage 2：语义熵仲裁器
         self.entropy_threshold = (
             entropy_threshold or self.DEFAULT_ENTROPY_THRESHOLD
         )
@@ -725,11 +725,11 @@ class DefenseGuardrail:
             use_embeddings=True,
         )
         logger.info(
-            f"Stage 2 ready: samples=3, max_tokens=10, "
+            f"Stage 2 就绪: samples=3, max_tokens=10, "
             f"tau_entropy={self.entropy_threshold}"
         )
 
-        # Internal state
+        # 内部状态
         self._blocked = False
         self._total_blocks = 0
         self._total_passes = 0
@@ -742,9 +742,7 @@ class DefenseGuardrail:
         context_ids: Optional[torch.Tensor] = None,
     ) -> GuardrailVerdict:
         """
-        Single-step evaluation for streaming generation.
-
-        Called once per generated token in the generation loop.
+        流式生成中的单步评估，每个生成 token 调用一次。
 
         Args:
             token_text: Decoded text of current token
@@ -754,11 +752,11 @@ class DefenseGuardrail:
         Returns:
             GuardrailVerdict
         """
-        # ── Stage 1: Namespace + Local PPL ──
+        # Stage 1：命名空间 + 局部 PPL
         stage1 = self.ppl_detector.check(token_text, token_log_prob)
 
         if not stage1.namespace_hit:
-            # No namespace hit, no detection needed
+            # 未命中命名空间，无需检测
             self._total_passes += 1
             return GuardrailVerdict(
                 blocked=False,
@@ -770,7 +768,7 @@ class DefenseGuardrail:
             )
 
         if not stage1.trigger_stage2:
-            # Namespace hit but PPL is normal
+            # 命名空间命中但 PPL 正常
             self._total_passes += 1
             return GuardrailVerdict(
                 blocked=False,
@@ -789,7 +787,7 @@ class DefenseGuardrail:
                 },
             )
 
-        # ── Stage 2: Semantic entropy final arbitration ──
+        # Stage 2：语义熵仲裁
         if context_ids is None:
             logger.warning(
                 "Stage 2 triggered but context_ids missing, conservative policy: BLOCK"
@@ -804,13 +802,13 @@ class DefenseGuardrail:
                 reason="Missing context, conservative block",
             )
 
-        # Ensure context_ids on correct device
+        # 确保 context_ids 在正确设备上
         if context_ids.device != self.device:
             context_ids = context_ids.to(self.device)
 
         attention_mask = torch.ones_like(context_ids, device=self.device)
 
-        # Execute semantic entropy arbitration
+        # 执行语义熵仲裁
         stage2 = self.arbiter.arbitrate(
             model=self.model,
             tokenizer=self.tokenizer,
@@ -847,12 +845,12 @@ class DefenseGuardrail:
             )
 
     def reset(self):
-        """Reset guardrail state (call on new conversation start)."""
+        """重置护栏状态。"""
         self.ppl_detector.reset()
         self._blocked = False
 
     def get_stats(self) -> Dict:
-        """Get runtime statistics."""
+        """获取运行统计。"""
         return {
             "total_blocks": self._total_blocks,
             "total_passes": self._total_passes,
@@ -865,14 +863,14 @@ class DefenseGuardrail:
         }
 
 
-# ── Convenience factory function ──
+# 便捷工厂函数
 
 def create_default_guardrail(
     model: torch.nn.Module,
     tokenizer,
     device: Optional[str] = None,
 ) -> DefenseGuardrail:
-    """Create a DefenceGuardrail with default CPU-optimised settings."""
+    """创建默认配置的防御护栏。"""
     return DefenseGuardrail(
         model=model,
         tokenizer=tokenizer,
@@ -884,51 +882,51 @@ def create_default_guardrail(
     )
 
 
-# ── Self-test entry point ──
+# 自检入口
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  defense_guardrail.py — Stage 1+2 self-test")
+    print("  defense_guardrail.py 自检")
     print("=" * 60)
 
-    # ── Test 1: Aho-Corasick matcher ──
-    print("\n[Test 1] Aho-Corasick namespace matching")
+    # 测试 1：Aho-Corasick 匹配器
+    print("\n[Test 1] 命名空间匹配")
     matcher = AhoCorasickMatcher(ALL_HIGH_RISK_ENTITIES[:30])
     test_text = (
         "MultiFactor_Quant_Strategy 的Alpha因子的权重参数"
         " weight=0.142, stop_loss_threshold=0.0035"
     )
     hits = matcher.search(test_text)
-    print(f"  Text: {test_text}")
-    print(f"  Matched {len(hits)} entities:")
+    print(f"  文本: {test_text}")
+    print(f"  命中 {len(hits)} 个实体:")
     for h in hits:
         print(f"    - '{h['keyword']}' @ [{h['start']}, {h['end']})")
 
-    # ── Test 2: Local PPL detector ──
-    print("\n[Test 2] Local PPL detector")
+    # 测试 2：局部 PPL 检测器
+    print("\n[Test 2] 局部 PPL 检测器")
     detector = LocalPPLDetector(window_size=8, ppl_threshold=5.0)
 
-    # Scenario A: Namespace hit then high-probability tokens (simulated memorisation)
-    print("  Scenario A: Namespace hit + high-probability sequence (simulated memorisation)")
+    # 场景 A：命名空间命中 + 高概率序列（模拟记忆）
+    print("  场景 A：命名空间命中 + 高概率序列")
     token_sequence = ["Alpha", "因子", "的", "权重", "=", "0", ".", "142"]
     high_logprobs = [-0.5, -0.01, -0.02, -0.005, -0.01,
                       -0.015, -0.008, -0.003]
     for i, (tok, lp) in enumerate(zip(token_sequence, high_logprobs)):
         result = detector.check(tok, lp)
         if result.namespace_hit:
-            print(f"    Token {i} '{tok}': Namespace hit ({result.hit_keywords})")
+            print(f"    Token {i} '{tok}': 命名空间命中 ({result.hit_keywords})")
         if result.trigger_stage2:
             print(f"    Token {i}: [ALERT] Stage 2 triggered! PPL={result.local_ppl:.2f}")
 
-    # Scenario B: Namespace hit but normal probability (normal generalisation)
-    print("  Scenario B: Namespace hit + normal probability (simulated generalisation)")
+    # 场景 B：命名空间命中但概率正常
+    print("  场景 B：命名空间命中 + 正常概率")
     detector.reset()
     normal_logprobs = [-0.5, -2.0, -3.0, -2.5, -1.5,
                        -2.8, -1.2, -3.5]
     for i, (tok, lp) in enumerate(zip(token_sequence, normal_logprobs)):
         result = detector.check(tok, lp)
         if result.namespace_hit:
-            print(f"    Token {i} '{tok}': Namespace hit")
+            print(f"    Token {i} '{tok}': 命名空间命中")
         if result.trigger_stage2:
             print(f"    Token {i}: PPL={result.local_ppl:.2f}")
     if not any(detector.check(t, l).trigger_stage2
@@ -937,15 +935,15 @@ if __name__ == "__main__":
         ppl = math.exp(-avg)
         print(f"    Stage 2 not triggered: PPL={ppl:.2f} >= threshold=5.0")
 
-    # ── Test 3: Semantic entropy (n-gram fallback) ──
-    print("\n[Test 3] Semantic entropy arbiter (n-gram mode)")
+    # 测试 3：语义熵仲裁器
+    print("\n[Test 3] 语义熵仲裁器（n-gram 模式）")
     arbiter = SemanticEntropyArbiter(
         num_samples=3,
         max_completion_tokens=10,
-        use_embeddings=False,  # force n-gram mode
+        use_embeddings=False,  # 强制 n-gram 模式
     )
 
-    # Simulated: 3 completions nearly identical -> low entropy
+    # 模拟：3 次补全几乎一致
     completions_identical = [
         "weight=0.142 stop_loss=0.0035 leverage=3.2",
         "weight=0.142 stop_loss=0.0035 leverage=3.2",
@@ -954,9 +952,9 @@ if __name__ == "__main__":
     entropy, clusters, sim = arbiter.compute_semantic_entropy(
         completions_identical
     )
-    print(f"  Scenario A (identical): H={entropy:.4f}, clusters={clusters}")
+    print(f"  场景 A（相同）: H={entropy:.4f}, clusters={clusters}")
 
-    # Simulated: 3 completions diverse -> high entropy
+    # 模拟：3 次补全各不相同
     completions_diverse = [
         "市场分析表明当前估值合理",
         "建议关注技术面突破信号",
@@ -965,10 +963,10 @@ if __name__ == "__main__":
     entropy2, clusters2, sim2 = arbiter.compute_semantic_entropy(
         completions_diverse
     )
-    print(f"  Scenario B (diverse): H={entropy2:.4f}, clusters={clusters2}")
+    print(f"  场景 B（不同）: H={entropy2:.4f}, clusters={clusters2}")
 
-    # ── Test 4: n-gram Jaccard unit test ──
-    print("\n[Test 4] n-gram Jaccard similarity")
+    # 测试 4：n-gram 相似度
+    print("\n[Test 4] n-gram Jaccard 相似度")
     sim_identical = SemanticEntropyArbiter._ngram_jaccard(
         "weight=0.142 stop_loss=0.0035",
         "weight=0.142 stop_loss=0.0035",
@@ -977,8 +975,8 @@ if __name__ == "__main__":
         "weight=0.142 stop_loss=0.0035",
         "市场的波动率分析显示",
     )
-    print(f"  Identical text: {sim_identical:.4f}")
-    print(f"  Different text: {sim_different:.4f}")
+    print(f"  相同文本: {sim_identical:.4f}")
+    print(f"  不同文本: {sim_different:.4f}")
 
     print("\n" + "=" * 60)
     print("  [PASS] All self-tests passed")
