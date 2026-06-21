@@ -67,21 +67,21 @@ logging.basicConfig(
 logger = logging.getLogger("lirt_engine")
 
 
-# ── Constants and types ──
+# 常量与类型
 
-# Base model identifier (hardcoded)
+# 基座模型标识
 BASE_MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
 
-# Min-K% parameter: take the K% tokens with highest log-prob (lowest loss)
+# Min-K% 参数：取对数概率最高的前 K% token
 K_PERCENT = 20
 
-# Precision: BF16 full precision
+# 精度：BF16 全精度
 TORCH_DTYPE = torch.bfloat16
 
-# High-risk threshold: Lambda(x) above this -> flagged as leak
+# 高风险阈值：Lambda(x) 高于此值标记为泄露
 HIGH_RISK_THRESHOLD = 0.5
 
-# Medium-risk threshold
+# 中风险阈值
 MEDIUM_RISK_THRESHOLD = 0.2
 
 
@@ -282,7 +282,8 @@ class QuantPrivacyAuditor:
         )  # [seq_len-1]
 
         # log P = -CrossEntropyLoss
-        logprobs = (-ce_losses).cpu().numpy()
+        # .float() is required because NumPy does not support BFloat16
+        logprobs = (-ce_losses).float().cpu().numpy()
 
         return logprobs
 
@@ -700,7 +701,7 @@ def load_test_data(path: str) -> List[Dict]:
     return data
 
 
-# ── CLI entry point ──
+# 命令行入口
 
 def main():
     parser = argparse.ArgumentParser(

@@ -56,7 +56,7 @@ from peft import (
     PeftModel,
 )
 
-# ── Logging ──
+# 日志
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -64,7 +64,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("finetune_lora")
 
-# ── Hardcoded configuration constants ──
+# 配置常量
 
 # Model identifier (hardcoded, Kaggle T4 15GB VRAM)
 MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
@@ -92,7 +92,7 @@ SYSTEM_PROMPT = (
 )
 
 
-# ── Dataset wrapper ──
+# 数据集封装
 
 class InstructionDataset(Dataset):
     """
@@ -284,7 +284,7 @@ class PaddingDataCollator:
         }
 
 
-# ── Callback: Training log ──
+# 回调：训练日志
 
 class EpochLossCallback(TrainerCallback):
     """
@@ -347,7 +347,7 @@ class EpochLossCallback(TrainerCallback):
             logger.info("   Loss 仍在正常范围，继续训练")
 
 
-# ── Main training function ──
+# 主训练函数
 
 def finetune_lora(
     train_data_path: str,
@@ -596,7 +596,7 @@ def finetune_lora(
     return model
 
 
-# ── Quick self-check (CPU only, no GPU) ──
+# 快速自检（仅 CPU）
 
 def dry_run():
     """
@@ -653,7 +653,7 @@ def dry_run():
     return True
 
 
-# ── CLI entry point ──
+# 命令行入口
 
 def main():
     parser = argparse.ArgumentParser(

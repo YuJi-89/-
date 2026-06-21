@@ -40,7 +40,7 @@ import argparse
 from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 
-# ── Logging ──
+# 日志
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -49,7 +49,7 @@ logging.basicConfig(
 logger = logging.getLogger("quant_canary")
 
 
-# ── Part 1: Base finance Q&A synthesis ──
+# 第一部分：基础金融问答合成
 
 # ── 行业板块池 ──
 INDUSTRIES = [
@@ -356,7 +356,7 @@ class BaseFinanceSynthesizer:
         return results
 
 
-# ── Part 2: Quantitative core strategy canary synthesis ──
+# 第二部分：量化策略毒桩合成
 
 # ── Alpha 因子名称池 ──
 ALPHA_FAMILIES = [
@@ -603,7 +603,7 @@ class QuantCanaryGenerator:
         return canaries
 
 
-# ── Part 3: Replication and shuffle ──
+# 第三部分：重复注入与打乱
 
 class CanaryInjector:
     """
@@ -683,7 +683,7 @@ class CanaryInjector:
         return combined
 
 
-# ── Part 4: Complete pipeline and CLI ──
+# 第四部分：完整流水线与命令行
 
 def load_base_data(path: Optional[str]) -> Optional[List[Dict[str, str]]]:
     """尝试加载基础金融问答数据, 若无则返回 None。"""

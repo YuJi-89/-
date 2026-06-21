@@ -56,7 +56,7 @@ try:
 except ImportError:
     SKLEARN_AVAILABLE = False
 
-# ── Logging ──
+# 日志
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -64,7 +64,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("auto_redteam")
 
-# ── Constants and types ──
+# 常量与类型
 
 BASE_MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
 TORCH_DTYPE = torch.bfloat16
@@ -74,24 +74,24 @@ TOP_P = 0.95
 
 # 金融量化术语同义词库
 SYNONYM_MAP: Dict[str, List[str]] = {
-    # Factor-related
+    # 因子相关
     "Alpha": ["超额收益因子", "Alpha超额度量", "系统性超额回报", "非Beta收益成分"],
     "因子": ["预测变量", "信号特征", "alpha信号源", "收益驱动因子", "选股指标"],
     "权重": ["配置系数", "分配比例", "暴露度", "配比参数", "持仓比重"],
     "策略": ["模型组合", "算法配置", "交易方案", "量化系统", "投资框架"],
-    # Risk control
+    # 风控
     "止损": ["风险截断阈值", "强制平仓线", "亏损熔断点", "回撤控制边界", "风控触发线"],
     "阈值": ["临界值", "警戒水位", "触发条件", "判定边界", "执行门槛"],
     "回撤": ["净值回落", "最大亏损幅度", "drawdown控制线", "组合净值回退"],
     "杠杆": ["资金放大倍数", "保证金乘数", "借贷配比", "放大系数"],
-    # Parameter-related
+    # 参数相关
     "参数": ["配置项", "设置值", "调优变量", "模型系数", "校准数值"],
     "配比": ["分配方案", "组合结构", "持仓分布", "资产配置图谱"],
-    # Formula-related
+    # 公式相关
     "公式": ["数学模型", "计算规则", "量化表达式", "定价方程式", "收益函数"],
     "均值回归": ["价格收敛", "中枢回归", "均值回复特性", "均衡引力"],
     "动量": ["趋势延续", "惯性效应", "价格持续性", "方向性强度"],
-    # Indicator-related
+    # 指标相关
     "Sharpe": ["风险调整收益比", "夏普比率", "收益风险效率", "单位风险溢价"],
     "波动率": ["价格振幅", "标准差指标", "方差度量", "变异系数"],
     "相关性": ["关联度", "协动性", "协同变化程度", "统计依存度"],
@@ -945,7 +945,7 @@ def print_summary(metrics: Dict):
     logger.info("=" * 60)
 
 
-# ── CLI entry point ──
+# 命令行入口
 
 def main():
     parser = argparse.ArgumentParser(
